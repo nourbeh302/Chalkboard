@@ -1,12 +1,16 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import {
   Auth,
-  AuthModule,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  updateProfile,
+  user,
 } from '@angular/fire/auth';
 import { Firestore, addDoc, collection } from '@angular/fire/firestore';
+import { Observable, from } from 'rxjs';
+import { Login } from '../../modules/auth/login/interfaces/login';
+import { User } from '../models/User';
 
 @Injectable({
   providedIn: 'root',
@@ -15,30 +19,44 @@ export class UserService {
   private firestore = inject(Firestore);
   private firebaseAuth = inject(Auth);
 
+  user$ = user(this.firebaseAuth);
+  loggedInUser = signal<User | null | undefined>(undefined);
+
   constructor() {}
 
-  async login(email: string, password: string) {
-    const credential = await signInWithEmailAndPassword(
+  login(email: string, password: string): Observable<void> {
+    const credential = signInWithEmailAndPassword(
       this.firebaseAuth,
       email,
       password
-    );
+    ).then(() => {});
 
-    return credential.user;
+    return from(credential);
   }
 
-  async register(email: string, password: string) {
-    await createUserWithEmailAndPassword(this.firebaseAuth, email, password);
+  register(
+    email: string,
+    displayName: string,
+    password: string
+  ): Observable<void> {
+    let credential = createUserWithEmailAndPassword(
+      this.firebaseAuth,
+      email,
+      password
+    ).then((response) => {
+      const userData = {
+        email: email,
+        displayName: displayName,
+        password: password,
+      };
+      addDoc(collection(this.firestore, 'Users'), userData);
+      updateProfile(response.user, { displayName: displayName });
+    });
 
-    const userData = {
-      email: email,
-      password: password,
-    };
-
-    await addDoc(collection(this.firestore, 'Users'), userData);
+    return from(credential);
   }
 
   async logOut() {
-    await signOut(this.firebaseAuth)
+    await signOut(this.firebaseAuth);
   }
 }
